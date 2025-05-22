@@ -9,7 +9,8 @@ type GameRepository interface {
 
 type GameService interface {
 	StartGame(botLevel int) (*GameSession, error)
-	SubmitMove(gameID string, move Move) (*Move, error)
+	SubmitMove(gameID string, move Move) ([]Move, error)
 	EndGame(gameID, result string) error
 	GetMoves(gameID string) ([]Move, error)
 }
+
