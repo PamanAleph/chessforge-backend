@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -31,6 +32,17 @@ func (r *gameRepo) CreateGame(session *game.GameSession) error {
 
 // SaveMove inserts a move made in the game
 func (r *gameRepo) SaveMove(move *game.Move) error {
+	// Cek apakah sudah ada move untuk game_id + move_number + color
+	var existingID int
+	checkQuery := `
+		SELECT id FROM moves WHERE game_id = $1 AND move_number = $2 AND color = $3
+	`
+	err := r.dbConn.QueryRow(context.Background(), checkQuery, move.GameID, move.MoveNumber, move.Color).Scan(&existingID)
+	if err == nil {
+		return fmt.Errorf("duplicate move already exists (id: %d)", existingID)
+	}
+
+	// Simpan jika belum ada
 	query := `
 		INSERT INTO moves (game_id, move_number, color, from_square, to_square, san, fen, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -42,6 +54,7 @@ func (r *gameRepo) SaveMove(move *game.Move) error {
 		move.From, move.To, move.SAN, move.FEN, move.CreatedAt,
 	).Scan(&move.ID)
 }
+
 
 // GetMoves retrieves all moves for a game
 func (r *gameRepo) GetMoves(gameID string) ([]game.Move, error) {
