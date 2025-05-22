@@ -34,12 +34,13 @@ func (r *gameRepo) SaveMove(move *game.Move) error {
 	query := `
 		INSERT INTO moves (game_id, move_number, color, from_square, to_square, san, fen, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING id
 	`
 
-	_, err := r.dbConn.Exec(context.Background(), query,
-		move.GameID, move.MoveNumber, move.Color, move.From, move.To, move.SAN, move.FEN, move.CreatedAt)
-
-	return err
+	return r.dbConn.QueryRow(context.Background(), query,
+		move.GameID, move.MoveNumber, move.Color,
+		move.From, move.To, move.SAN, move.FEN, move.CreatedAt,
+	).Scan(&move.ID)
 }
 
 // GetMoves retrieves all moves for a game

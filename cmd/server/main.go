@@ -10,6 +10,7 @@ import (
 	"github.com/pamanaleph/chessforge-backend/internal/router"
 	"github.com/pamanaleph/chessforge-backend/internal/repository/postgres"
 	gameService "github.com/pamanaleph/chessforge-backend/internal/service/game"
+	"github.com/pamanaleph/chessforge-backend/internal/engine"
 )
 
 func main() {
@@ -20,7 +21,13 @@ func main() {
 
 	db := postgres.NewDB()
 	repo := postgres.NewGameRepository(db)
-	service := gameService.NewService(repo)
+
+	stockfishEngine, err := engine.NewStockfish("./bin/stockfish.exe")
+	if err != nil {
+		log.Fatal("Failed to start Stockfish:", err)
+	}
+
+	service := gameService.NewService(repo, stockfishEngine)
 
 	router.Register(app, service)
 

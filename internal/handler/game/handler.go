@@ -1,6 +1,8 @@
 package game
 
 import (
+	"fmt"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/pamanaleph/chessforge-backend/internal/domain/game"
 	"github.com/pamanaleph/chessforge-backend/internal/utils"
@@ -73,8 +75,10 @@ func (h *Handler) SubmitMove(c *fiber.Ctx) error {
 
 	savedMove, err := h.service.SubmitMove(gameID, move)
 	if err != nil {
-		return utils.Error(c, fiber.StatusInternalServerError, "Failed to save move")
+		fmt.Println("❌ ERROR SubmitMove:", err)
+		return utils.Error(c, fiber.StatusInternalServerError, fmt.Sprintf("Failed to submit move: %v", err))
 	}
+	
 
 	return utils.Success(c, "Move saved successfully", savedMove)
 }
