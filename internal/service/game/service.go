@@ -5,13 +5,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	chess "github.com/notnil/chess"
 	"github.com/pamanaleph/chessforge-backend/internal/domain/game"
 	"github.com/pamanaleph/chessforge-backend/internal/engine"
-	chess "github.com/notnil/chess"
 )
 
 type service struct {
-	repo game.GameRepository
+	repo   game.GameRepository
 	engine *engine.Stockfish
 }
 
@@ -21,7 +21,6 @@ func NewService(repo game.GameRepository, sfEngine *engine.Stockfish) game.GameS
 		engine: sfEngine,
 	}
 }
-
 
 // StartGame initializes a new game session against a bot
 func (s *service) StartGame(botLevel int) (*game.GameSession, error) {
@@ -45,67 +44,69 @@ func (s *service) SubmitMove(gameID string, playerMove game.Move) ([]game.Move, 
 	playerMove.GameID = gameID
 	playerMove.CreatedAt = time.Now()
 
+	// Ambil semua langkah sebelumnya
+	moves, err := s.repo.GetMoves(gameID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve existing moves: %w", err)
+	}
+	playerMove.MoveNumber = len(moves) + 1
+
+	// Hitung giliran jalan
+	isWhiteTurn := len(moves)%2 == 0
+	if (isWhiteTurn && playerMove.Color != "white") || (!isWhiteTurn && playerMove.Color != "black") {
+		return nil, fmt.Errorf("not your turn: it's %s's move", map[bool]string{true: "white", false: "black"}[isWhiteTurn])
+	}
+
+	// Build ulang state papan dari histori
 	gameState := chess.NewGame()
-	if err := gameState.Position().UnmarshalText([]byte(playerMove.FEN)); err != nil {
-		return nil, fmt.Errorf("invalid FEN from player: %w", err)
-	}
-
-	// Build and apply move from UCI
-	uci := fmt.Sprintf("%s%s", playerMove.From, playerMove.To)
-	legalMoves := gameState.ValidMoves()
-	var found *chess.Move
-	for _, m := range legalMoves {
-		if m.S1().String() == playerMove.From && m.S2().String() == playerMove.To {
-			found = m
-			break
+	uci := chess.UCINotation{}
+	for _, m := range moves {
+		moveStr := fmt.Sprintf("%s%s", m.From, m.To)
+		move, err := uci.Decode(gameState.Position(), moveStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid historical move: %w", err)
 		}
+		gameState.Move(move)
 	}
-	if found == nil {
-		return nil, fmt.Errorf("invalid player move: %s", uci)
-	}
-	gameState.Move(found)
 
-	// Set SAN & FEN for player move
+	// Apply langkah player
+	playerMoveStr := fmt.Sprintf("%s%s", playerMove.From, playerMove.To)
+	playerMoveDecoded, err := uci.Decode(gameState.Position(), playerMoveStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid player move: %w", err)
+	}
+	gameState.Move(playerMoveDecoded)
+
 	playerMove.SAN = gameState.Moves()[len(gameState.Moves())-1].String()
 	playerMove.FEN = gameState.FEN()
 
-	// Simpan player move
+	// Simpan langkah player
 	if err := s.repo.SaveMove(&playerMove); err != nil {
 		return nil, fmt.Errorf("failed to save player move: %w", err)
 	}
 
-	// Get bot move from Stockfish
-	bestMove, err := s.engine.GetBestMove(playerMove.FEN)
-	if err != nil {
-		return nil, fmt.Errorf("stockfish error: %w", err)
+	// Get bot move dari Stockfish
+	bestMoveStr, err := s.engine.GetBestMove(playerMove.FEN)
+	if err != nil || len(bestMoveStr) != 4 {
+		return nil, fmt.Errorf("stockfish error: %v", err)
 	}
-	if len(bestMove) != 4 {
-		return nil, fmt.Errorf("invalid bestmove from stockfish: %s", bestMove)
-	}
-	botFrom := bestMove[:2]
-	botTo := bestMove[2:]
+	botFrom, botTo := bestMoveStr[:2], bestMoveStr[2:]
 
 	// Apply bot move
-	legalMoves = gameState.ValidMoves()
-	var botFound *chess.Move
-	for _, m := range legalMoves {
-		if m.S1().String() == botFrom && m.S2().String() == botTo {
-			botFound = m
-			break
-		}
+	botMoveDecoded, err := uci.Decode(gameState.Position(), bestMoveStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid bot move: %w", err)
 	}
-	if botFound == nil {
-		return nil, fmt.Errorf("invalid bot move: %s", bestMove)
-	}
-	gameState.Move(botFound)
+	gameState.Move(botMoveDecoded)
 
+	// Simpan langkah bot
 	botMove := game.Move{
 		GameID:     gameID,
 		MoveNumber: playerMove.MoveNumber + 1,
 		Color:      "black",
 		From:       botFrom,
 		To:         botTo,
-		SAN:        botFound.String(),
+		SAN:        gameState.Moves()[len(gameState.Moves())-1].String(),
 		FEN:        gameState.FEN(),
 		CreatedAt:  time.Now(),
 	}

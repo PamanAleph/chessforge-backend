@@ -32,12 +32,16 @@ func (r *gameRepo) CreateGame(session *game.GameSession) error {
 
 // SaveMove inserts a move made in the game
 func (r *gameRepo) SaveMove(move *game.Move) error {
-	// Cek apakah sudah ada move untuk game_id + move_number + color
+	// Cek apakah sudah ada move identik (game_id, move_number, color, from, to)
 	var existingID int
 	checkQuery := `
-		SELECT id FROM moves WHERE game_id = $1 AND move_number = $2 AND color = $3
+		SELECT id FROM moves
+		WHERE game_id = $1 AND move_number = $2 AND color = $3 AND from_square = $4 AND to_square = $5
 	`
-	err := r.dbConn.QueryRow(context.Background(), checkQuery, move.GameID, move.MoveNumber, move.Color).Scan(&existingID)
+	err := r.dbConn.QueryRow(context.Background(), checkQuery,
+		move.GameID, move.MoveNumber, move.Color, move.From, move.To,
+	).Scan(&existingID)
+
 	if err == nil {
 		return fmt.Errorf("duplicate move already exists (id: %d)", existingID)
 	}
@@ -54,7 +58,6 @@ func (r *gameRepo) SaveMove(move *game.Move) error {
 		move.From, move.To, move.SAN, move.FEN, move.CreatedAt,
 	).Scan(&move.ID)
 }
-
 
 // GetMoves retrieves all moves for a game
 func (r *gameRepo) GetMoves(gameID string) ([]game.Move, error) {
