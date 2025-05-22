@@ -61,10 +61,8 @@ func (r *gameRepo) GetMoves(gameID string) ([]game.Move, error) {
 	var moves []game.Move
 	for rows.Next() {
 		var m game.Move
-		if err := rows.Scan(
-			&m.ID, &m.GameID, &m.MoveNumber, &m.Color,
-			&m.From, &m.To, &m.SAN, &m.FEN, &m.CreatedAt,
-		); err != nil {
+		err := rows.Scan(&m.ID, &m.GameID, &m.MoveNumber, &m.Color, &m.From, &m.To, &m.SAN, &m.FEN, &m.CreatedAt)
+		if err != nil {
 			return nil, err
 		}
 		moves = append(moves, m)

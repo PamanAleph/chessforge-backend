@@ -19,6 +19,7 @@ func NewHandler(service game.GameService) *Handler {
 func RegisterRoutes(router fiber.Router, handler *Handler) {
 	router.Post("/start", handler.StartGame)
 	router.Post("/:id/move", handler.SubmitMove)
+	router.Get("/:id/moves", handler.GetMoves)
 }
 
 type startGameRequest struct {
@@ -82,3 +83,18 @@ func (h *Handler) SubmitMove(c *fiber.Ctx) error {
 
 	return utils.Success(c, "Move saved successfully", savedMove)
 }
+
+func (h *Handler) GetMoves(c *fiber.Ctx) error {
+	gameID := c.Params("id")
+	if gameID == "" {
+		return utils.Error(c, fiber.StatusBadRequest, "Missing game ID")
+	}
+
+	moves, err := h.service.GetMoves(gameID)
+	if err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "Failed to get moves")
+	}
+
+	return utils.Success(c, "Game moves retrieved", moves)
+}
+
