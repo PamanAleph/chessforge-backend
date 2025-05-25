@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -31,6 +32,21 @@ func (r *gameRepo) CreateGame(session *game.GameSession) error {
 
 // SaveMove inserts a move made in the game
 func (r *gameRepo) SaveMove(move *game.Move) error {
+	// Cek apakah sudah ada move identik (game_id, move_number, color, from, to)
+	var existingID int
+	checkQuery := `
+		SELECT id FROM moves
+		WHERE game_id = $1 AND move_number = $2 AND color = $3 AND from_square = $4 AND to_square = $5
+	`
+	err := r.dbConn.QueryRow(context.Background(), checkQuery,
+		move.GameID, move.MoveNumber, move.Color, move.From, move.To,
+	).Scan(&existingID)
+
+	if err == nil {
+		return fmt.Errorf("duplicate move already exists (id: %d)", existingID)
+	}
+
+	// Simpan jika belum ada
 	query := `
 		INSERT INTO moves (game_id, move_number, color, from_square, to_square, san, fen, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -61,10 +77,8 @@ func (r *gameRepo) GetMoves(gameID string) ([]game.Move, error) {
 	var moves []game.Move
 	for rows.Next() {
 		var m game.Move
-		if err := rows.Scan(
-			&m.ID, &m.GameID, &m.MoveNumber, &m.Color,
-			&m.From, &m.To, &m.SAN, &m.FEN, &m.CreatedAt,
-		); err != nil {
+		err := rows.Scan(&m.ID, &m.GameID, &m.MoveNumber, &m.Color, &m.From, &m.To, &m.SAN, &m.FEN, &m.CreatedAt)
+		if err != nil {
 			return nil, err
 		}
 		moves = append(moves, m)
