@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/pamanaleph/chessforge-backend/internal/domain/game"
@@ -88,13 +87,18 @@ func (r *gameRepo) GetMoves(gameID string) ([]game.Move, error) {
 }
 
 // EndGame sets the result and ended_at of the game
-func (r *gameRepo) EndGame(gameID string, result string) error {
+func (r *gameRepo) EndGame(gameID, result string) error {
 	query := `
-		UPDATE game_sessions
-		SET result = $1, ended_at = $2
-		WHERE id = $3
+		UPDATE games
+		SET result = $1, ended_at = NOW()
+		WHERE id = $2
 	`
-
-	_, err := r.dbConn.Exec(context.Background(), query, result, time.Now(), gameID)
-	return err
+	cmdTag, err := r.dbConn.Exec(context.Background(), query, result, gameID)
+	if err != nil {
+		return fmt.Errorf("failed to end game: %w", err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return fmt.Errorf("game not found")
+	}
+	return nil
 }
