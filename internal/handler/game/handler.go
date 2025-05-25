@@ -20,6 +20,8 @@ func RegisterRoutes(router fiber.Router, handler *Handler) {
 	router.Post("/start", handler.StartGame)
 	router.Post("/:id/move", handler.SubmitMove)
 	router.Get("/:id/moves", handler.GetMoves)
+	router.Post("/:id/end", handler.EndGame)
+
 }
 
 type startGameRequest struct {
@@ -98,3 +100,20 @@ func (h *Handler) GetMoves(c *fiber.Ctx) error {
 	return utils.Success(c, "Game moves retrieved", moves)
 }
 
+type endGameRequest struct {
+	Result string `json:"result"` // e.g. "white_win", "black_win", "draw"
+}
+
+func (h *Handler) EndGame(c *fiber.Ctx) error {
+	gameID := c.Params("id")
+	var req endGameRequest
+	if err := c.BodyParser(&req); err != nil || req.Result == "" {
+		return utils.Error(c, fiber.StatusBadRequest, "Invalid result payload")
+	}
+
+	if err := h.service.EndGame(gameID, req.Result); err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "Failed to end game")
+	}
+
+	return utils.Success(c, "Game ended", nil)
+}
